@@ -125,12 +125,12 @@ def do_boot(cs, args):
 
     nics = []
     if args.public:
-        nics.append({'net-id': '0000000000-0000-0000-0000-000000000000',
+        nics.append({'net-id': '00000000-0000-0000-0000-000000000000',
                      'v4-fixed-ip': '', 'port-id': ''})
     if args.service_net:
-        nics.append({'net-id': '1111111111-1111-1111-1111-111111111111',
+        nics.append({'net-id': '11111111-1111-1111-1111-111111111111',
                      'v4-fixed-ip': '', 'port-id': ''})
-    if nics in boot_kwargs:
+    if 'nics' in boot_kwargs:
         boot_kwargs['nics'].extend(nics)
     else:
         boot_kwargs['nics'] = nics
