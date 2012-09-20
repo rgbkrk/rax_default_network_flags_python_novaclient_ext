@@ -16,144 +16,58 @@
 """
 Instance create default networks extension
 """
-import argparse
-
-from novaclient.v1_1.shell import _boot
-from novaclient.v1_1.shell import _find_flavor
-from novaclient.v1_1.shell import _find_image
-from novaclient.v1_1.shell import _poll_for_status
 from novaclient import utils
+from novaclient.v1_1 import servers
+from novaclient.v1_1 import shell
 
 
-@utils.arg('--flavor',
-     default=None,
-     metavar='<flavor>',
-     help="Flavor ID (see 'nova flavor-list').")
-@utils.arg('--image',
-     default=None,
-     metavar='<image>',
-     help="Image ID (see 'nova image-list'). ")
-@utils.arg('--meta',
-     metavar="<key=value>",
-     action='append',
-     default=[],
-     help="Record arbitrary key/value metadata to /meta.js "\
-          "on the new server. Can be specified multiple times.")
-@utils.arg('--file',
-     metavar="<dst-path=src-path>",
-     action='append',
-     dest='files',
-     default=[],
-     help="Store arbitrary files from <src-path> locally to <dst-path> "\
-          "on the new server. You may store up to 5 files.")
-@utils.arg('--key-name',
-    metavar='<key-name>',
-    help="Key name of keypair that should be created earlier with \
-        the command keypair-add")
-@utils.arg('--key_name',
-    help=argparse.SUPPRESS)
-@utils.arg('name', metavar='<name>', help='Name for the new server')
-@utils.arg('--user-data',
-    default=None,
-    metavar='<user-data>',
-    help="user data file to pass to be exposed by the metadata server.")
-@utils.arg('--user_data',
-    help=argparse.SUPPRESS)
-@utils.arg('--availability-zone',
-    default=None,
-    metavar='<availability-zone>',
-    help="The availability zone for instance placement.")
-@utils.arg('--availability_zone',
-    help=argparse.SUPPRESS)
-@utils.arg('--security-groups',
-    default=None,
-    metavar='<security-groups>',
-    help="Comma separated list of security group names.")
-@utils.arg('--security_groups',
-    help=argparse.SUPPRESS)
-@utils.arg('--block-device-mapping',
-    metavar="<dev-name=mapping>",
-    action='append',
-    default=[],
-    help="Block device mapping in the format "
-        "<dev-name>=<id>:<type>:<size(GB)>:<delete-on-terminate>.")
-@utils.arg('--block_device_mapping',
-    action='append',
-    help=argparse.SUPPRESS)
-@utils.arg('--hint',
-        action='append',
-        dest='scheduler_hints',
-        default=[],
-        metavar='<key=value>',
-        help="Send arbitrary key/value pairs to the scheduler for custom use.")
-@utils.arg('--nic',
-     metavar="<net-id=net-uuid,v4-fixed-ip=ip-addr>",
-     action='append',
-     dest='nics',
-     default=[],
-     help="Create a NIC on the server.\n"
-           "Specify option multiple times to create multiple NICs.\n"
-           "net-id: attach NIC to network with this UUID (optional)\n"
-           "v4-fixed-ip: IPv4 fixed address for NIC (optional).\n"
-           "port-id: attach NIC to port with this UUID (optional)")
-@utils.arg('--config-drive',
-     metavar="<value>",
-     dest='config_drive',
-     default=False,
-     help="Enable config drive")
-@utils.arg('--poll',
-    dest='poll',
-    action="store_true",
-    default=False,
-    help='Blocks while instance builds so progress can be reported.')
-@utils.arg('--no-public',
-    dest='public',
-    action='store_false',
-    default=True,
-    help='Boot instance without public network connectivity.')
-@utils.arg('--no-service-net',
-    dest='service_net',
-    action='store_false',
-    default=True,
-    help='Boot instance without service network connectivity.')
-def do_boot(cs, args):
-    """Boot a new server."""
-    boot_args, boot_kwargs = _boot(cs, args)
+def add_args():
+    utils.add_arg(shell.do_boot,
+        '--no-public',
+        dest='public',
+        action='store_false',
+        default=True,
+        help='Boot instance without public network connectivity.')
+    utils.add_arg(shell.do_boot,
+        '--no-service-net',
+        dest='service_net',
+        action='store_false',
+        default=True,
+        help='Boot instance without service network connectivity.')
 
-    extra_boot_kwargs = utils.get_resource_manager_extra_kwargs(do_boot, args)
-    boot_kwargs.update(extra_boot_kwargs)
 
-    nics = []
-    if args.public:
-        nics.append({'net-id': '00000000-0000-0000-0000-000000000000',
-                     'v4-fixed-ip': '', 'port-id': ''})
-    if args.service_net:
-        nics.append({'net-id': '11111111-1111-1111-1111-111111111111',
-                     'v4-fixed-ip': '', 'port-id': ''})
-    if 'nics' in boot_kwargs:
-        boot_kwargs['nics'].extend(nics)
-    else:
-        boot_kwargs['nics'] = nics
+def bind_args_to_resource_manager(args):
+    def add_default_networks_config(args):
+        return dict(public=args.public, service_net=args.service_net)
 
-    server = cs.servers.create(*boot_args, **boot_kwargs)
+    utils.add_resource_manager_extra_kwargs_hook(
+            shell.do_boot, add_default_networks_config)
 
-    # Keep any information (like adminPass) returned by create
-    info = server._info
-    server = cs.servers.get(info['id'])
-    info.update(server._info)
 
-    flavor = info.get('flavor', {})
-    flavor_id = flavor.get('id', '')
-    info['flavor'] = _find_flavor(cs, flavor_id).name
+def add_modify_body_hook():
+    def modify_body_for_create(body, **kwargs):
+        public = kwargs.get('public')
+        service_net = kwargs.get('service_net')
+        nics = []
+        if public:
+            nics.append({'uuid': '00000000-0000-0000-0000-000000000000'})
+        if service_net:
+            nics.append({'uuid': '11111111-1111-1111-1111-111111111111'})
+        if 'nics' in kwargs:
+            kwargs['nics'].extend(nics)
+        else:
+            kwargs['nics'] = nics
 
-    image = info.get('image', {})
-    image_id = image.get('id', '')
-    info['image'] = _find_image(cs, image_id).name
+        body['server']['networks'] = kwargs['nics']
 
-    info.pop('links', None)
-    info.pop('addresses', None)
+    servers.ServerManager.add_hook(
+            'modify_body_for_create', modify_body_for_create)
 
-    utils.print_dict(info)
 
-    if args.poll:
-        _poll_for_status(cs.servers.get, info['id'], 'building', ['active'])
+def __pre_parse_args__():
+    add_args()
+
+
+def __post_parse_args__(args):
+    bind_args_to_resource_manager(args)
+    add_modify_body_hook()
