@@ -46,6 +46,9 @@ def bind_args_to_resource_manager(args):
 
 def add_modify_body_hook():
     def modify_body_for_create(body, **kwargs):
+        if body.get('server') is None:
+            return
+
         public = kwargs.get('public')
         service_net = kwargs.get('service_net')
         nics = []
