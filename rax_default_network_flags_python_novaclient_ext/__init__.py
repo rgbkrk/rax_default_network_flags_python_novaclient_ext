@@ -46,22 +46,19 @@ def bind_args_to_resource_manager(args):
 
 def add_modify_body_hook():
     def modify_body_for_create(body, **kwargs):
-        if body.get('server') is None:
+        if not body.get('server'):
+            # NOTE(tr3buchet) need to figure why this is being triggered on
+            # network creates, quick fix for now..
             return
-
         public = kwargs.get('public')
         service_net = kwargs.get('service_net')
-        nics = []
+        networks = body['server'].get('networks') or []
         if public:
-            nics.append({'uuid': '00000000-0000-0000-0000-000000000000'})
+            networks.append({'uuid': '00000000-0000-0000-0000-000000000000'})
         if service_net:
-            nics.append({'uuid': '11111111-1111-1111-1111-111111111111'})
-        if 'nics' in kwargs:
-            kwargs['nics'].extend(nics)
-        else:
-            kwargs['nics'] = nics
+            networks.append({'uuid': '11111111-1111-1111-1111-111111111111'})
 
-        body['server']['networks'] = kwargs['nics']
+        body['server']['networks'] = networks
 
     servers.ServerManager.add_hook(
             'modify_body_for_create', modify_body_for_create)
