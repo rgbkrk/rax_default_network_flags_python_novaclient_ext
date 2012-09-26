@@ -53,10 +53,12 @@ def add_modify_body_hook():
         public = kwargs.get('public')
         service_net = kwargs.get('service_net')
         networks = body['server'].get('networks') or []
-        if public:
-            networks.append({'uuid': '00000000-0000-0000-0000-000000000000'})
-        if service_net:
-            networks.append({'uuid': '11111111-1111-1111-1111-111111111111'})
+        pub_dict = {'uuid': '00000000-0000-0000-0000-000000000000'}
+        snet_dict = {'uuid': '11111111-1111-1111-1111-111111111111'}
+        if public and pub_dict not in networks:
+            networks.append(pub_dict)
+        if service_net and snet_dict not in networks:
+            networks.append(snet_dict)
 
         body['server']['networks'] = networks
 
