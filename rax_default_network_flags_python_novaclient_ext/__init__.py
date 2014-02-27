@@ -33,7 +33,7 @@ def add_arg(f, *args, **kwargs):
     # tests.
     if (args, kwargs) not in f.arguments:
         # Because of the semantics of the decorator composition if we just append
-        # to te options list positional options will appear to be backwards.
+        # to the options list positional options will appear to be backwards.
         f.arguments.insert(0, (args, kwargs))
 
 
